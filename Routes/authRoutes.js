@@ -3,15 +3,15 @@ import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { client } from '../dbConfig.js';
+
 const router = express.Router();
 const myDB = client.db('Batch-5');
 const Users = myDB.collection('Users');
 
-
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'farazhayat448@@gmail.com',
+    user: 'farazhayat448@gmail.com', // fixed typo (double @@ removed)
     pass: 'ugxp mjus wsry xzjy',
   },
 });
@@ -21,10 +21,9 @@ function generateOtp() {
 }
 
 function signToken(user) {
-
   return jwt.sign(
     { email: user.email, firstName: user.firstName },
-    'secret',
+    process.env.SECRET_KEY || 'secret',
     { expiresIn: '1h' }
   );
 }
@@ -42,13 +41,16 @@ router.post('/register', async (req, res) => {
 
     const lowerEmail = email.toLowerCase();
     const emailFormat = /^[a-zA-Z0-9_.+]+(?<!^[0-9]*)@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
-    const passwordValidation = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,20}$/;
+    const passwordValidation =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,20}$/;
     const phoneVerification = /^(?:\+92|0)3[0-9]{9}$/;
 
     if (
-      !(lowerEmail.match(emailFormat) &&
+      !(
+        lowerEmail.match(emailFormat) &&
         password.match(passwordValidation) &&
-        phone.match(phoneVerification))
+        phone.match(phoneVerification)
+      )
     ) {
       return res.send('Invalid email, password or phone number');
     }
@@ -73,7 +75,6 @@ router.post('/register', async (req, res) => {
       isVerified: false,
     });
 
-    // Send OTP email
     try {
       await transporter.sendMail({
         from: 'farazhayat448@gmail.com',
@@ -85,10 +86,16 @@ router.post('/register', async (req, res) => {
         message: 'OTP sent to your email. Please verify within 5 minutes.',
       });
     } catch (mailErr) {
-      return res.send({ message: 'Error sending OTP email', error: mailErr?.message || mailErr });
+      return res.send({
+        message: 'Error sending OTP email',
+        error: mailErr?.message || mailErr,
+      });
     }
   } catch (err) {
-    return res.send({ message: 'Something Went Wrong', error: err?.message || err });
+    return res.send({
+      message: 'Something Went Wrong',
+      error: err?.message || err,
+    });
   }
 });
 
@@ -105,7 +112,6 @@ router.post('/verify-otp', async (req, res) => {
 
     if (user.isVerified) return res.send('User already verified. Please login.');
 
-    // Handle missing expiry or expired
     if (!user.otpExpiresAt || Date.now() > user.otpExpiresAt) {
       const newOtp = generateOtp();
       const newExpiry = Date.now() + 5 * 60 * 1000;
@@ -126,7 +132,10 @@ router.post('/verify-otp', async (req, res) => {
           message: 'OTP expired. A new OTP has been emailed. Please verify again.',
         });
       } catch (mailErr) {
-        return res.send({ message: 'Error sending new OTP email', error: mailErr?.message || mailErr });
+        return res.send({
+          message: 'Error sending new OTP email',
+          error: mailErr?.message || mailErr,
+        });
       }
     }
 
@@ -141,18 +150,21 @@ router.post('/verify-otp', async (req, res) => {
         status: 1,
         message: 'OTP verified. Login successful!',
         token,
-        data: { ...user, password: undefined }, // avoid sending hash
+        data: { ...user, password: undefined },
       });
     } else {
       return res.send('Invalid OTP');
     }
   } catch (err) {
-    return res.send({ message: 'Something Went Wrong', error: err?.message || err });
+    return res.send({
+      message: 'Something Went Wrong',
+      error: err?.message || err,
+    });
   }
 });
 
 /* =========================
-   Login (sends OTP if not verified)
+   Login
    ========================= */
 router.post('/login', async (req, res) => {
   try {
@@ -172,16 +184,6 @@ router.post('/login', async (req, res) => {
     if (!matchPassword) {
       return res.send({ status: 0, message: 'Invalid Email or Password' });
     }
-
-    const Token = await jwt.sign({
-      email,
-      firstName : user.firstName,
-    },process.env.SECRET_KEY, { expiresIn: '1h' })
-
-    res.cookie("token", token,{
-      httpOnly: true,
-      secure : true
-    })
 
     if (!user.isVerified) {
       const newOtp = generateOtp();
@@ -204,17 +206,84 @@ router.post('/login', async (req, res) => {
           message: 'Please verify OTP sent to your email before login.',
         });
       } catch (mailErr) {
-        return res.send({ status: 0, message: 'Error sending OTP email', error: mailErr?.message || mailErr });
+        return res.send({
+          status: 0,
+          message: 'Error sending OTP email',
+          error: mailErr?.message || mailErr,
+        });
       }
     }
 
-    
-
-    // Verified → issue token
     const token = signToken(user);
-    return res.send({ status: 1, message: 'Login Successful', token, data: { ...user, password: undefined } });
+    return res.send({
+      status: 1,
+      message: 'Login Successful',
+      token,
+      data: { ...user, password: undefined },
+    });
   } catch (error) {
-    return res.send({ status: 0, message: 'Something Went Wrong', error: error?.message || error });
+    return res.send({
+      status: 0,
+      message: 'Something Went Wrong',
+      error: error?.message || error,
+    });
+  }
+});
+
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    const lowerEmail = email?.toLowerCase();
+
+    const user = await Users.findOne({ email: lowerEmail });
+    if (!user) return res.send({ status: 0, message: 'User not found' });
+
+   
+    if (!otp && !newPassword) {
+      const generatedOtp = generateOtp();
+      const expiry = Date.now() + 5 * 60 * 1000;
+
+      await Users.updateOne(
+        { email: lowerEmail },
+        { $set: { resetOtp: generatedOtp, resetOtpExpiry: expiry } }
+      );
+
+      await transporter.sendMail({
+        from: 'farazhayat448@gmail.com',
+        to: lowerEmail,
+        subject: 'Password Reset OTP',
+        text: `Your OTP is ${generatedOtp}. It will expire in 5 minutes.`,
+      });
+
+      return res.send({ status: 1, message: 'OTP sent to your email' });
+    }
+
+    if (otp && newPassword) {
+      if (
+        user.resetOtp === otp &&
+        user.resetOtpExpiry &&
+        Date.now() < user.resetOtpExpiry
+      ) {
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        await Users.updateOne(
+          { email: lowerEmail },
+          { $set: { password: hashedPassword }, $unset: { resetOtp: '', resetOtpExpiry: '' } }
+        );
+
+        return res.send({ status: 1, message: 'Password reset successfully' });
+      } else {
+        return res.send({ status: 0, message: 'Invalid or expired OTP' });
+      }
+    }
+
+    return res.send({ status: 0, message: 'Invalid request' });
+  } catch (error) {
+    return res.send({
+      status: 0,
+      message: 'Something Went Wrong',
+      error: error?.message || error,
+    });
   }
 });
 
