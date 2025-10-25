@@ -11,7 +11,7 @@ const Users = myDB.collection('Users');
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'farazhayat448@gmail.com', // fixed typo (double @@ removed)
+    user: 'farazhayat448@gmail.com', 
     pass: 'ugxp mjus wsry xzjy',
   },
 });
@@ -282,6 +282,25 @@ router.post('/forgot-password', async (req, res) => {
     return res.send({
       status: 0,
       message: 'Something Went Wrong',
+      error: error?.message || error,
+    });
+  }
+});
+
+router.post ('/logout', async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if(!token) {
+      return res.send({ status: 0, message: 'Token Not Found' });
+    }
+    return res.send({ status: 1, message: 'Logout Successful' });
+
+  }catch(error) {
+    console.error('Logout error:', error);
+    return res.send({
+      status: 0,
+      message: 'Something went Wrong',
       error: error?.message || error,
     });
   }

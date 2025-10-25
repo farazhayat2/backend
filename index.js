@@ -33,6 +33,7 @@ app.use(cookieParser());
 
 
 app.use(userRoutes)
+app.use(authRoutes)
 
 app.listen(port)
 // export default app
