@@ -12,7 +12,14 @@ client.connect();
 console.log('you Successfully connect to mongodb');
 
 const app = express()
-app.use(cors())
+app.use(cors({
+    origin: [
+      "https://olx-clone-lac-one.vercel.app", // your deployed frontend
+    ],
+    credentials: true,
+  }));
+  
+  
 const port = process.env.PORT || 3001
 app.use(express.json());
 app.use(cookieParser());

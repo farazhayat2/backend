@@ -102,133 +102,115 @@ router.post('/register', async (req, res) => {
 /* =========================
    Verify OTP
    ========================= */
-router.post('/verify-otp', async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-    const lowerEmail = email?.toLowerCase();
+// router.post('/verify-otp', async (req, res) => {
+//   try {
+//     const { email, otp } = req.body;
+//     const lowerEmail = email?.toLowerCase();
 
-    const user = await Users.findOne({ email: lowerEmail });
-    if (!user) return res.send('User not found');
+//     const user = await Users.findOne({ email: lowerEmail });
+//     if (!user) return res.send('User not found');
 
-    if (user.isVerified) return res.send('User already verified. Please login.');
+//     if (user.isVerified) return res.send('User already verified. Please login.');
 
-    if (!user.otpExpiresAt || Date.now() > user.otpExpiresAt) {
-      const newOtp = generateOtp();
-      const newExpiry = Date.now() + 5 * 60 * 1000;
+//     if (!user.otpExpiresAt || Date.now() > user.otpExpiresAt) {
+//       const newOtp = generateOtp();
+//       const newExpiry = Date.now() + 5 * 60 * 1000;
 
-      await Users.updateOne(
-        { email: lowerEmail },
-        { $set: { otp: newOtp, otpExpiresAt: newExpiry } }
-      );
+//       await Users.updateOne(
+//         { email: lowerEmail },
+//         { $set: { otp: newOtp, otpExpiresAt: newExpiry } }
+//       );
 
-      try {
-        await transporter.sendMail({
-          from: 'farazhayat448@gmail.com',
-          to: lowerEmail,
-          subject: 'OTP Expired – New OTP',
-          text: `Your new OTP is ${newOtp}. It will expire in 5 minutes.`,
-        });
-        return res.send({
-          message: 'OTP expired. A new OTP has been emailed. Please verify again.',
-        });
-      } catch (mailErr) {
-        return res.send({
-          message: 'Error sending new OTP email',
-          error: mailErr?.message || mailErr,
-        });
-      }
-    }
+//       try {
+//         await transporter.sendMail({
+//           from: 'farazhayat448@gmail.com',
+//           to: lowerEmail,
+//           subject: 'OTP Expired – New OTP',
+//           text: `Your new OTP is ${newOtp}. It will expire in 5 minutes.`,
+//         });
+//         return res.send({
+//           message: 'OTP expired. A new OTP has been emailed. Please verify again.',
+//         });
+//       } catch (mailErr) {
+//         return res.send({
+//           message: 'Error sending new OTP email',
+//           error: mailErr?.message || mailErr,
+//         });
+//       }
+//     }
 
-    if (user.otp === otp) {
-      await Users.updateOne(
-        { email: lowerEmail },
-        { $set: { isVerified: true }, $unset: { otp: '', otpExpiresAt: '' } }
-      );
+//     if (user.otp === otp) {
+//       await Users.updateOne(
+//         { email: lowerEmail },
+//         { $set: { isVerified: true }, $unset: { otp: '', otpExpiresAt: '' } }
+//       );
 
-      const token = signToken(user);
-      return res.send({
-        status: 1,
-        message: 'OTP verified. Login successful!',
-        token,
-        data: { ...user, password: undefined },
-      });
-    } else {
-      return res.send('Invalid OTP');
-    }
-  } catch (err) {
-    return res.send({
-      message: 'Something Went Wrong',
-      error: err?.message || err,
-    });
-  }
-});
+//       const token = signToken(user);
+//       return res.send({
+//         status: 1,
+//         message: 'OTP verified. Login successful!',
+//         token,
+//         data: { ...user, password: undefined },
+//       });
+//     } else {
+//       return res.send('Invalid OTP');
+//     }
+//   } catch (err) {
+//     return res.send({
+//       message: 'Something Went Wrong',
+//       error: err?.message || err,
+//     });
+//   }
+// });
 
 /* =========================
    Login
    ========================= */
-router.post('/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const lowerEmail = email?.toLowerCase();
-
-    if (!lowerEmail || !password) {
-      return res.send({ status: 0, message: 'Email or Password is required' });
-    }
-
-    const user = await Users.findOne({ email: lowerEmail });
-    if (!user) {
-      return res.send({ status: 0, message: 'Email not registered!' });
-    }
-
-    const matchPassword = await bcrypt.compare(password, user.password);
-    if (!matchPassword) {
-      return res.send({ status: 0, message: 'Invalid Email or Password' });
-    }
-
-    if (!user.isVerified) {
-      const newOtp = generateOtp();
-      const newExpiry = Date.now() + 5 * 60 * 1000;
-
-      await Users.updateOne(
-        { email: lowerEmail },
-        { $set: { otp: newOtp, otpExpiresAt: newExpiry } }
-      );
-
-      try {
-        await transporter.sendMail({
-          from: 'farazhayat448@gmail.com',
-          to: lowerEmail,
-          subject: 'Login OTP Verification',
-          text: `Your OTP for login is ${newOtp}. It will expire in 5 minutes.`,
-        });
-        return res.send({
-          status: 0,
-          message: 'Please verify OTP sent to your email before login.',
-        });
-      } catch (mailErr) {
-        return res.send({
-          status: 0,
-          message: 'Error sending OTP email',
-          error: mailErr?.message || mailErr,
-        });
+   router.post("/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+  
+      if (!email || !password)
+        return res.status(400).json({ status: 0, message: "Email and password are required" });
+  
+      const lowerEmail = email.toLowerCase();
+      const user = await Users.findOne({ email: lowerEmail });
+  
+      if (!user)
+        return res.status(404).json({ status: 0, message: "Email not registered!" });
+  
+      const match = await bcrypt.compare(password, user.password);
+      if (!match)
+        return res.status(401).json({ status: 0, message: "Invalid email or password" });
+  
+      // If OTP verification is required
+      if (!user.isVerified) {
+        return res.status(403).json({ status: 0, message: "Please verify your email first" });
       }
+  
+      const token = signToken(user);
+  
+      return res.status(200).json({
+        status: 1,
+        message: "Login Successful",
+        token,
+        data: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+        },
+      });
+    } catch (err) {
+      console.error("Login Error:", err);
+      return res.status(500).json({
+        status: 0,
+        message: "Something went wrong",
+        error: err.message,
+      });
     }
-
-    const token = signToken(user);
-    return res.send({
-      status: 1,
-      message: 'Login Successful',
-      token,
-      data: { ...user, password: undefined },
-    });
-  } catch (error) {
-    return res.send({
-      status: 0,
-      message: 'Something Went Wrong',
-      error: error?.message || error,
-    });
-  }
-});
+  });
+  
+  
 
 router.post('/forgot-password', async (req, res) => {
   try {
@@ -287,23 +269,24 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-router.post ('/logout', async (req, res) => {
+/* =========================
+   LogOut
+   ========================= */
+
+router.post('/logout', (req, res) => {
   try {
-    const { token } = req.body;
-
-    if(!token) {
-      return res.send({ status: 0, message: 'Token Not Found' });
-    }
-    return res.send({ status: 1, message: 'Logout Successful' });
-
-  }catch(error) {
-    console.error('Logout error:', error);
-    return res.send({
+    res.status(200).send({
+      status: 1,
+      message: 'Logout successful'
+    });
+  } catch (error) {
+    res.status(500).send({
       status: 0,
-      message: 'Something went Wrong',
-      error: error?.message || error,
+      message: 'Error while logging out',
+      error: error.message
     });
   }
 });
+
 
 export default router;
